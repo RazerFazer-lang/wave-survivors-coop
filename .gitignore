@@ -1,0 +1,28 @@
+# Abhängigkeiten
+node_modules/
+.pnpm-store/
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-error.log*
+
+# Laufzeit / Build
+dist/
+build/
+coverage/
+.cache/
+*.tsbuildinfo
+
+# Umgebung & Geheimnisse (niemals committen)
+.env
+.env.*
+!.env.example
+
+# Editor / Betriebssystem
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

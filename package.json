@@ -1,0 +1,17 @@
+{
+  "name": "wave-survivors-coop",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Coop-Wellen-Survival (Vampire-Survivors-artig) mit Klassen, Loot und Level-ups",
+  "scripts": {
+    "start": "node server/index.js",
+    "smoke": "node tools/smoke.mjs"
+  },
+  "dependencies": {
+    "ws": "8.18.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
