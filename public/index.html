@@ -1,0 +1,1496 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>Wave Survivors Coop</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+
+  :root {
+    --bg: #0b0e14;
+    --panel: #141a24;
+    --panel-2: #1b2330;
+    --line: #2a3443;
+    --text: #e6ebf2;
+    --muted: #93a0b4;
+    --accent: #4da3ff;
+    --good: #6ee7a8;
+    --warn: #ffd166;
+    --bad: #ff6b6b;
+    --radius: 12px;
+  }
+
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    background: var(--bg);
+    color: var(--text);
+    font: 15px/1.45 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    overscroll-behavior: none;
+  }
+
+  #cv {
+    position: fixed;
+    inset: 0;
+    display: block;
+    width: 100%;
+    height: 100%;
+    touch-action: none;
+    cursor: crosshair;
+  }
+
+  button {
+    font: inherit;
+    color: var(--text);
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 9px 14px;
+    cursor: pointer;
+    transition: background .12s ease, border-color .12s ease, transform .08s ease;
+  }
+  button:hover:not(:disabled) { background: #222c3b; border-color: #3a4759; }
+  button:active:not(:disabled) { transform: translateY(1px); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  button.primary { background: #1d4e86; border-color: #2b6cb8; }
+  button.primary:hover:not(:disabled) { background: #245d9d; }
+  button.danger { border-color: #5a2a2a; }
+  button.danger:hover:not(:disabled) { background: #3a1f1f; }
+
+  input[type="text"] {
+    font: inherit;
+    color: var(--text);
+    background: #0f141c;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 9px 12px;
+    width: 100%;
+    min-width: 0;
+  }
+  input[type="text"]:focus-visible,
+  button:focus-visible,
+  [tabindex]:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  .hidden { display: none !important; }
+
+  /* ---------------------------------------------------------- Overlays */
+
+  .screen {
+    position: fixed;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    background: radial-gradient(1200px 800px at 50% 0%, #121a26 0%, #080b11 70%);
+    z-index: 40;
+    overflow: auto;
+  }
+
+  .card {
+    width: min(960px, 100%);
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 22px;
+    box-shadow: 0 18px 60px rgba(0, 0, 0, .55);
+  }
+
+  .card h1 { margin: 0 0 4px; font-size: 26px; letter-spacing: .3px; }
+  .card h2 { margin: 0 0 12px; font-size: 18px; }
+  .card p.sub { margin: 0 0 18px; color: var(--muted); font-size: 14px; }
+
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+  .row > .grow { flex: 1 1 180px; }
+
+  .field { display: block; margin-bottom: 12px; }
+  .field > span { display: block; margin-bottom: 5px; font-size: 13px; color: var(--muted); }
+
+  .classes {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+    margin: 14px 0 18px;
+  }
+
+  .cls {
+    text-align: left;
+    padding: 12px;
+    border-radius: var(--radius);
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    display: grid;
+    gap: 4px;
+  }
+  .cls[aria-pressed="true"] { border-color: var(--accent); background: #1b2a3d; }
+  .cls .n { font-weight: 600; }
+  .cls .d { font-size: 12.5px; color: var(--muted); }
+  .cls .s { font-size: 12px; color: #7f8ca0; }
+
+  .plist { display: grid; gap: 6px; margin: 0 0 16px; padding: 0; list-style: none; }
+  .plist li {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--panel-2); border: 1px solid var(--line);
+    border-radius: 10px; padding: 8px 10px;
+  }
+  .dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; background: #55607280; }
+  .tag { margin-left: auto; font-size: 12px; color: var(--muted); }
+  .tag.ready { color: var(--good); }
+
+  table.res { width: 100%; border-collapse: collapse; margin: 8px 0 16px; }
+  table.res th, table.res td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); font-size: 14px; }
+  table.res th { color: var(--muted); font-weight: 500; font-size: 12.5px; }
+
+  .notice {
+    border: 1px solid #4a3a1c; background: #241c0d; color: var(--warn);
+    border-radius: 10px; padding: 9px 12px; font-size: 13px; margin-bottom: 14px;
+  }
+
+  /* ---------------------------------------------------------- HUD */
+
+  #hud { position: fixed; inset: 0; z-index: 20; pointer-events: none; }
+  #hud .pointer { pointer-events: auto; }
+
+  #stats {
+    position: absolute; top: 12px; left: 12px; width: min(300px, 46vw);
+    background: #0d121bcc; border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 10px; backdrop-filter: blur(4px);
+  }
+  #stats .nm { display: flex; align-items: baseline; gap: 8px; margin-bottom: 7px; }
+  #stats .nm b { font-size: 15px; }
+  #stats .nm span { font-size: 12px; color: var(--muted); }
+
+  .bar { height: 12px; border-radius: 7px; background: #0a0e15; border: 1px solid var(--line); overflow: hidden; position: relative; }
+  .bar + .bar { margin-top: 6px; }
+  .bar > i { display: block; height: 100%; width: 0%; transition: width .12s linear; }
+  .bar > em {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    font: 600 10px/1 system-ui, sans-serif; font-style: normal; color: #dce4f0;
+    text-shadow: 0 1px 2px #000a;
+  }
+  .bar.hp > i { background: linear-gradient(90deg, #c23b3b, #ff7a59); }
+  .bar.xp > i { background: linear-gradient(90deg, #2b6cb8, #4da3ff); }
+
+  #purse { display: flex; gap: 12px; margin-top: 8px; font-size: 12px; color: var(--muted); flex-wrap: wrap; }
+  #purse b { color: var(--text); font-weight: 600; }
+
+  #waveinfo {
+    position: absolute; top: 12px; left: 50%; transform: translateX(-50%);
+    background: #0d121bcc; border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 8px 14px; text-align: center; backdrop-filter: blur(4px); white-space: nowrap;
+  }
+  #waveinfo .w { font-weight: 700; }
+  #waveinfo .e { font-size: 12px; color: var(--muted); }
+
+  #cds { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; }
+  .pill {
+    min-width: 92px; text-align: center; padding: 7px 10px; border-radius: 10px;
+    background: #0d121bcc; border: 1px solid var(--line); font-size: 12px; position: relative; overflow: hidden;
+  }
+  .pill b { display: block; font-size: 13px; }
+  .pill .fill { position: absolute; left: 0; bottom: 0; top: 0; background: #ffffff14; width: 0%; }
+  .pill.ready { border-color: #2f6b4a; }
+
+  #topright { position: absolute; top: 12px; right: 12px; display: flex; gap: 8px; }
+
+  #banner {
+    position: absolute; top: 24%; left: 50%; transform: translateX(-50%);
+    font: 700 clamp(20px, 5vw, 38px)/1.2 system-ui, sans-serif; text-align: center;
+    text-shadow: 0 3px 18px #000c; opacity: 0; transition: opacity .25s ease;
+  }
+  #banner.show { opacity: 1; }
+
+  #toasts { position: absolute; top: 96px; right: 12px; display: grid; gap: 7px; justify-items: end; max-width: 56vw; }
+  .toast {
+    background: #0d121bdd; border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    border-radius: 9px; padding: 7px 11px; font-size: 13px; animation: slide .2s ease;
+  }
+  @keyframes slide { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
+
+  #chatwrap { position: absolute; bottom: 14px; left: 12px; width: min(380px, 60vw); }
+  #chatlog { display: grid; gap: 3px; margin-bottom: 6px; max-height: 26vh; overflow: hidden; }
+  #chatlog div { font-size: 13px; text-shadow: 0 1px 3px #000b; }
+  #chatlog b { color: var(--accent); }
+  #chatlog .sys { color: var(--muted); font-style: italic; }
+  #chatform { display: flex; gap: 6px; }
+
+  #deadnote {
+    position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+    text-align: center; background: #0d121bdd; border: 1px solid var(--line);
+    border-radius: var(--radius); padding: 14px 20px;
+  }
+  #deadnote b { display: block; font-size: 20px; margin-bottom: 4px; }
+  #deadnote span { color: var(--muted); font-size: 13px; }
+
+  /* ---------------------------------------------------------- Inventar */
+
+  #inv {
+    position: absolute; top: 50%; right: 12px; transform: translateY(-50%);
+    width: min(400px, 92vw); max-height: 78vh; overflow: auto;
+    background: #0d121bf2; border: 1px solid var(--line); border-radius: 14px; padding: 14px;
+  }
+  #inv h3 { margin: 0 0 10px; font-size: 16px; display: flex; align-items: center; gap: 8px; }
+  #inv h3 small { margin-left: auto; color: var(--muted); font-weight: 400; font-size: 11.5px; }
+  #inv h4 { margin: 14px 0 7px; font-size: 12.5px; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; }
+
+  .item {
+    border: 1px solid var(--line); border-left-width: 3px; border-radius: 10px;
+    background: var(--panel-2); padding: 8px 10px; margin-bottom: 7px;
+  }
+  .item .hd { display: flex; align-items: baseline; gap: 7px; flex-wrap: wrap; }
+  .item .hd b { font-size: 13.5px; }
+  .item .hd small { color: var(--muted); font-size: 11px; }
+  .item ul { margin: 5px 0 0; padding-left: 16px; }
+  .item li { font-size: 12px; color: #c6d0de; }
+  .item .acts { display: flex; gap: 6px; margin-top: 7px; }
+  .item .acts button { padding: 4px 9px; font-size: 12px; border-radius: 8px; }
+  .item.empty { color: var(--muted); font-size: 12.5px; border-left-color: var(--line); }
+
+  .statgrid { display: grid; grid-template-columns: 1fr 1fr; gap: 3px 10px; font-size: 12.5px; }
+  .statgrid div { display: flex; justify-content: space-between; gap: 8px; border-bottom: 1px dotted #263040; padding: 2px 0; }
+  .statgrid span { color: var(--muted); }
+
+  /* ---------------------------------------------------------- Level-up */
+
+  #levelup {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    background: #05070bb8; backdrop-filter: blur(3px); z-index: 30;
+  }
+  #levelup .box { width: min(760px, 94vw); background: var(--panel); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
+  #levelup h2 { margin: 0 0 3px; }
+  #levelup p { margin: 0 0 16px; color: var(--muted); font-size: 13.5px; }
+  #lvopts { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+  #lvopts button { display: grid; gap: 5px; text-align: left; padding: 14px; }
+  #lvopts .k { font-size: 11px; color: var(--muted); }
+  #lvopts .n { font-weight: 700; font-size: 15px; }
+  #lvopts .d { font-size: 12.5px; color: #c6d0de; }
+  #lvopts .s { font-size: 11.5px; color: var(--muted); }
+
+  /* ---------------------------------------------------------- Touch */
+
+  #touch { position: absolute; inset: 0; display: none; }
+  #touch .dashbtn {
+    position: absolute; right: 22px; bottom: 90px; width: 86px; height: 86px;
+    border-radius: 50%; font-weight: 700; background: #16202ecc;
+  }
+  @media (hover: none) and (pointer: coarse) {
+    #touch { display: block; }
+    #chatwrap { width: min(260px, 48vw); }
+    #chatlog { max-height: 16vh; }
+  }
+
+  @media (max-width: 640px) {
+    .card { padding: 16px; }
+    #stats { width: min(230px, 54vw); padding: 8px; }
+    #inv { right: 6px; width: min(340px, 94vw); max-height: 70vh; }
+    #cds { bottom: 8px; }
+    .pill { min-width: 76px; }
+    #toasts { top: 84px; max-width: 70vw; }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+  }
+</style>
+</head>
+<body>
+
+<canvas id="cv" aria-label="Spielfeld"></canvas>
+
+<!-- ------------------------------------------------------------ HUD -->
+<div id="hud" class="hidden">
+  <div id="stats">
+    <div class="nm"><b id="meName">—</b><span id="meCls"></span></div>
+    <div class="bar hp"><i id="hpFill"></i><em id="hpTxt">0 / 0</em></div>
+    <div class="bar xp"><i id="xpFill"></i><em id="xpTxt">Stufe 1</em></div>
+    <div id="purse">
+      <span>Gold <b id="sGold">0</b></span>
+      <span>Kills <b id="sKills">0</b></span>
+      <span>Schaden <b id="sDmg">0</b></span>
+      <span>Tempo <b id="sMs">0</b></span>
+    </div>
+  </div>
+
+  <div id="waveinfo">
+    <div class="w" id="wTitle">Vorbereitung</div>
+    <div class="e" id="wSub">—</div>
+  </div>
+
+  <div id="topright">
+    <button class="pointer" id="btnInv" aria-pressed="false" title="Inventar (Tab)">Inventar</button>
+    <button class="pointer" id="btnHelp" title="Steuerung">?</button>
+  </div>
+
+  <div id="banner" role="status" aria-live="polite"></div>
+  <div id="toasts" role="status" aria-live="polite"></div>
+
+  <div id="cds">
+    <div class="pill" id="pillDash"><div class="fill"></div><b>Sprint</b><span>Leertaste</span></div>
+    <div class="pill" id="pillAb"><div class="fill"></div><b id="abName">Fähigkeit</b><span id="abState">bereit</span></div>
+  </div>
+
+  <div id="deadnote" class="hidden">
+    <b id="deadTitle">Am Boden</b>
+    <span id="deadSub"></span>
+  </div>
+
+  <div id="inv" class="pointer hidden" role="dialog" aria-label="Inventar">
+    <h3>Ausrüstung <small>Klick zum Anlegen · Tab schließt</small></h3>
+    <div id="invEquipped"></div>
+    <h4>Rucksack (<span id="invCount">0</span>)</h4>
+    <div id="invBag"></div>
+    <h4>Werte</h4>
+    <div class="statgrid" id="invStats"></div>
+    <h4>Verbesserungen</h4>
+    <div class="statgrid" id="invUpg"></div>
+  </div>
+
+  <div id="chatwrap">
+    <div id="chatlog" aria-live="polite"></div>
+    <form id="chatform" class="pointer hidden" autocomplete="off">
+      <input type="text" id="chatinput" maxlength="200" placeholder="Nachricht … (Enter sendet, Esc schließt)" aria-label="Chat-Nachricht">
+    </form>
+  </div>
+
+  <div id="touch">
+    <button class="dashbtn pointer" id="btnDash" aria-label="Sprint">Sprint</button>
+  </div>
+
+  <div id="levelup" class="pointer hidden" role="dialog" aria-label="Stufenaufstieg">
+    <div class="box">
+      <h2>Stufe <span id="lvNum">2</span> erreicht</h2>
+      <p>Wähle eine Verbesserung. <span id="lvPending"></span> (Tasten 1–3)</p>
+      <div id="lvopts"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ------------------------------------------------------------ Beitreten -->
+<div class="screen" id="scJoin">
+  <div class="card">
+    <h1>Wave Survivors <span style="color:var(--accent)">Coop</span></h1>
+    <p class="sub">Überlebe gemeinsam endlose Gegnerwellen, sammle Beute und wähle bei jedem Stufenaufstieg eine Verbesserung. Angriffe laufen automatisch — du steuerst nur Position und Sprint.</p>
+    <div class="notice">Der Server hat keine Authentifizierung. Betreibe ihn nur im eigenen Netzwerk.</div>
+    <label class="field" for="inName"><span>Name</span>
+      <input type="text" id="inName" maxlength="16" placeholder="Held" autocomplete="nickname">
+    </label>
+    <label class="field" for="inRoom"><span>Raumcode (gleicher Code = gleiches Spiel)</span>
+      <input type="text" id="inRoom" maxlength="8" placeholder="LOBBY" autocomplete="off" spellcheck="false">
+    </label>
+    <div class="row">
+      <button class="primary grow" id="btnJoin">Raum betreten</button>
+      <button id="btnRnd">Zufälliger Code</button>
+    </div>
+    <p class="sub" id="joinErr" style="margin:14px 0 0;color:var(--bad)"></p>
+  </div>
+</div>
+
+<!-- ------------------------------------------------------------ Lobby -->
+<div class="screen hidden" id="scLobby">
+  <div class="card">
+    <div class="row" style="margin-bottom:10px">
+      <h1 style="margin:0">Raum <span id="lbCode" style="color:var(--accent)">—</span></h1>
+      <button style="margin-left:auto" id="btnCopy">Code kopieren</button>
+      <button class="danger" id="btnLeave">Verlassen</button>
+    </div>
+    <p class="sub">Das Spiel startet, sobald <b>alle</b> Spieler bereit sind.</p>
+    <div class="notice hidden" id="lbRunning">In diesem Raum läuft gerade eine Runde. Du kommst nach deren Ende dazu.</div>
+
+    <h2>Klasse wählen</h2>
+    <div class="classes" id="lbClasses"></div>
+
+    <h2>Spieler</h2>
+    <ul class="plist" id="lbPlayers"></ul>
+
+    <div class="row">
+      <button class="primary grow" id="btnReady" aria-pressed="false">Bereit</button>
+    </div>
+    <p class="sub" id="lbErr" style="margin:14px 0 0;color:var(--bad)"></p>
+  </div>
+</div>
+
+<!-- ------------------------------------------------------------ Ergebnis -->
+<div class="screen hidden" id="scOver">
+  <div class="card">
+    <h1>Runde beendet</h1>
+    <p class="sub" id="ovSub">—</p>
+    <table class="res">
+      <thead><tr><th>Spieler</th><th>Klasse</th><th>Stufe</th><th>Kills</th><th>Schaden</th><th>Gold</th></tr></thead>
+      <tbody id="ovBody"></tbody>
+    </table>
+    <div class="row">
+      <button class="primary grow" id="btnBack">Zurück zur Lobby</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ===================================================================== Setup
+
+const $ = (sel) => document.querySelector(sel);
+const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+const lerp = (a, b, t) => a + (b - a) * t;
+
+const CLASS_FALLBACK_COLOR = '#9aa7bb';
+
+const S = {
+  ws: null,
+  phase: 'join',            // join | lobby | game | over
+  myId: null,
+  room: '',
+  name: '',
+  cls: null,
+  ready: false,
+  arena: { w: 3200, h: 2400 },
+  meta: null,
+  lobby: null,
+  running: false,
+  snap: null,
+  inv: null,
+  levelOptions: null,
+  result: null,
+  cam: { x: 1600, y: 1200 },
+  smooth: new Map(),
+  seen: new Set(),
+  efx: [],
+  texts: [],
+  keys: new Set(),
+  stick: null,              // { id, ox, oy, mx, my }
+  dashQueued: false,
+  lastInput: { mx: 0, my: 0 },
+  lastInputAt: 0,
+  invOpen: false,
+  bannerTimer: 0,
+};
+
+const cv = $('#cv');
+const ctx = cv.getContext('2d');
+let dpr = 1;
+
+function resize() {
+  dpr = Math.min(window.devicePixelRatio || 1, 2);
+  cv.width = Math.max(1, Math.floor(window.innerWidth * dpr));
+  cv.height = Math.max(1, Math.floor(window.innerHeight * dpr));
+}
+window.addEventListener('resize', resize, { passive: true });
+resize();
+
+// ===================================================================== Netz
+
+function wsUrl() {
+  const proto = location.protocol === 'https:' ? 'wss://' : 'ws://';
+  const host = location.host || 'localhost:8080';
+  return proto + host;
+}
+
+function sendMsg(obj) {
+  if (!S.ws || S.ws.readyState !== WebSocket.OPEN) return;
+  try { S.ws.send(JSON.stringify(obj)); } catch { /* Socket weg */ }
+}
+
+function connect(name, room) {
+  if (S.ws) { try { S.ws.close(); } catch { /* ignore */ } }
+  let ws;
+  try { ws = new WebSocket(wsUrl()); } catch (err) {
+    $('#joinErr').textContent = 'Verbindung nicht möglich: ' + err.message;
+    return;
+  }
+  S.ws = ws;
+  $('#joinErr').textContent = 'Verbinde …';
+
+  ws.addEventListener('open', () => {
+    $('#joinErr').textContent = '';
+    sendMsg({ t: 'join', name, room });
+  });
+
+  ws.addEventListener('message', (ev) => {
+    let msg;
+    try { msg = JSON.parse(ev.data); } catch { return; }
+    handle(msg);
+  });
+
+  ws.addEventListener('close', () => {
+    if (S.phase === 'join') {
+      $('#joinErr').textContent = 'Verbindung zum Server verloren.';
+    } else {
+      setPhase('join');
+      $('#joinErr').textContent = 'Verbindung zum Server verloren.';
+    }
+    S.ws = null;
+  });
+
+  ws.addEventListener('error', () => {
+    $('#joinErr').textContent = 'Verbindungsfehler. Läuft der Server?';
+  });
+}
+
+function handle(m) {
+  switch (m.t) {
+    case 'joined':
+      S.myId = m.id;
+      S.room = m.room;
+      S.arena = m.arena || S.arena;
+      S.meta = m.meta;
+      S.running = !!m.running;
+      renderClasses();
+      setPhase('lobby');
+      break;
+
+    case 'lobby':
+      S.lobby = m;
+      S.running = m.state === 'running';
+      if (S.phase === 'lobby') renderLobby();
+      break;
+
+    case 'start':
+      S.arena = m.arena || S.arena;
+      S.snap = null;
+      S.smooth.clear();
+      S.efx.length = 0;
+      S.texts.length = 0;
+      S.result = null;
+      S.levelOptions = null;
+      $('#levelup').classList.add('hidden');
+      setPhase('game');
+      banner('Bereit machen …', 1.6);
+      break;
+
+    case 's':
+      S.snap = m;
+      consumeFx(m.fx || []);
+      break;
+
+    case 'wave':
+      banner('Welle ' + m.wave, 1.8);
+      break;
+
+    case 'wavedone':
+      banner('Welle ' + m.wave + ' überstanden', 1.8);
+      toast('Pause: ' + m.next + 's bis zur nächsten Welle');
+      break;
+
+    case 'inv':
+      S.inv = m;
+      renderInventory();
+      break;
+
+    case 'loot': {
+      const col = rarityColor(m.item.rarity);
+      const where = m.where === 'equipped' ? 'angelegt' : m.where === 'sold' ? 'verkauft (+10 Gold)' : 'im Rucksack';
+      toast('<b style="color:' + col + '">' + esc(m.item.name) + '</b> — ' + where, col);
+      break;
+    }
+
+    case 'levelup':
+      S.levelOptions = m.options;
+      $('#lvNum').textContent = String(m.lv);
+      $('#lvPending').textContent = m.pending > 1 ? '(' + m.pending + ' Aufstiege offen)' : '';
+      renderLevelUp();
+      break;
+
+    case 'levelupdone':
+      S.levelOptions = null;
+      $('#levelup').classList.add('hidden');
+      break;
+
+    case 'chat':
+      chatLine('<b>' + esc(m.from) + ':</b> ' + esc(m.text));
+      break;
+
+    case 'left':
+      chatLine('<span class="sys">' + esc(m.name) + ' hat den Raum verlassen.</span>');
+      break;
+
+    case 'gameover':
+      S.result = m.result;
+      setPhase('over');
+      break;
+
+    case 'error':
+      if (S.phase === 'lobby') $('#lbErr').textContent = m.msg;
+      else if (S.phase === 'join') $('#joinErr').textContent = m.msg;
+      toast(esc(m.msg), 'var(--bad)');
+      break;
+
+    default:
+      break;
+  }
+}
+
+// ===================================================================== Phasen
+
+function setPhase(p) {
+  S.phase = p;
+  $('#scJoin').classList.toggle('hidden', p !== 'join');
+  $('#scLobby').classList.toggle('hidden', p !== 'lobby');
+  $('#scOver').classList.toggle('hidden', p !== 'over');
+  $('#hud').classList.toggle('hidden', p !== 'game');
+  if (p === 'lobby') { $('#lbErr').textContent = ''; renderLobby(); }
+  if (p === 'over') renderResult();
+  if (p !== 'game') closeChat();
+}
+
+// ===================================================================== Lobby-UI
+
+function renderClasses() {
+  const box = $('#lbClasses');
+  box.textContent = '';
+  if (!S.meta) return;
+  for (const c of S.meta.classes) {
+    const b = document.createElement('button');
+    b.className = 'cls';
+    b.type = 'button';
+    b.setAttribute('aria-pressed', String(S.cls === c.id));
+    b.dataset.cls = c.id;
+    b.style.borderLeft = '3px solid ' + c.color;
+    b.innerHTML =
+      '<span class="n" style="color:' + c.color + '">' + esc(c.name) + '</span>' +
+      '<span class="d">' + esc(c.desc) + '</span>' +
+      '<span class="s">' + c.hp + ' Leben · Tempo ' + c.speed + ' · ' + esc(c.weapon) + ' / ' + esc(c.ability) + '</span>';
+    b.addEventListener('click', () => {
+      S.cls = c.id;
+      sendMsg({ t: 'pick', cls: c.id });
+      $('#lbErr').textContent = '';
+      renderClasses();
+    });
+    box.appendChild(b);
+  }
+}
+
+function renderLobby() {
+  $('#lbCode').textContent = S.room || '—';
+  $('#lbRunning').classList.toggle('hidden', !S.running);
+  const ul = $('#lbPlayers');
+  ul.textContent = '';
+  const players = (S.lobby && S.lobby.players) || [];
+  for (const p of players) {
+    const li = document.createElement('li');
+    const col = classColor(p.cls);
+    li.innerHTML =
+      '<span class="dot" style="background:' + col + '"></span>' +
+      '<span>' + esc(p.name) + (p.id === S.myId ? ' <small style="color:var(--muted)">(du)</small>' : '') + '</span>' +
+      '<span class="tag' + (p.ready ? ' ready' : '') + '">' + (p.cls ? esc(className(p.cls)) : 'keine Klasse') +
+      ' · ' + (p.ready ? 'bereit' : 'wartet') + '</span>';
+    ul.appendChild(li);
+  }
+  const me = players.find((p) => p.id === S.myId);
+  S.ready = !!(me && me.ready);
+  const btn = $('#btnReady');
+  btn.textContent = S.ready ? 'Bereit ✓ (abwählen)' : 'Bereit';
+  btn.setAttribute('aria-pressed', String(S.ready));
+  btn.disabled = !S.cls;
+}
+
+function renderResult() {
+  const r = S.result;
+  const body = $('#ovBody');
+  body.textContent = '';
+  if (!r) return;
+  const mm = String(Math.floor(r.time / 60)).padStart(2, '0');
+  const ss = String(r.time % 60).padStart(2, '0');
+  $('#ovSub').textContent = 'Welle ' + r.wave + ' · Spielzeit ' + mm + ':' + ss;
+  for (const p of r.players) {
+    const tr = document.createElement('tr');
+    tr.innerHTML =
+      '<td style="color:' + classColor(p.cls) + '">' + esc(p.name) + '</td>' +
+      '<td>' + esc(className(p.cls)) + '</td><td>' + p.lv + '</td>' +
+      '<td>' + p.kills + '</td><td>' + p.dmg + '</td><td>' + p.gold + '</td>';
+    body.appendChild(tr);
+  }
+}
+
+// ===================================================================== Inventar-UI
+
+function itemCard(item, mode) {
+  if (!item) return '<div class="item empty">— leer —</div>';
+  const col = rarityColor(item.rarity);
+  const affixes = item.affixes
+    .map((a) => '<li>' + esc(a.label) + ' +' + a.value + esc(a.unit || '') + '</li>')
+    .join('');
+  const acts = mode === 'bag'
+    ? '<div class="acts"><button type="button" data-act="equip" data-id="' + esc(item.id) + '">Anlegen</button>' +
+      '<button type="button" data-act="drop" data-id="' + esc(item.id) + '">Verkaufen</button></div>'
+    : '<div class="acts"><button type="button" data-act="drop" data-id="' + esc(item.id) + '">Verkaufen</button></div>';
+  return '<div class="item" style="border-left-color:' + col + '">' +
+    '<div class="hd"><b style="color:' + col + '">' + esc(item.name) + '</b>' +
+    '<small>' + esc(slotName(item.slot)) + ' · Stufe ' + item.level + ' · Wert ' + (item.power ?? 0) + '</small></div>' +
+    '<ul>' + affixes + '</ul>' + acts + '</div>';
+}
+
+const STAT_LABELS = [
+  ['maxHp', 'Max. Leben', ''], ['damage', 'Schaden', '%'], ['attackSpeed', 'Angriffstempo', '%'],
+  ['moveSpeed', 'Bewegungstempo', ''], ['crit', 'Krit-Chance', '%'], ['critDmg', 'Krit-Schaden', '%'],
+  ['armor', 'Rüstung', ''], ['regen', 'Leben/Sek.', ''], ['area', 'Wirkungsbereich', '%'],
+  ['projectiles', 'Zus. Projektile', ''], ['pierce', 'Durchschlag', ''], ['luck', 'Glück', ''],
+  ['thorns', 'Dornen', ''], ['pickup', 'Aufsammel-Radius', ''],
+];
+
+function renderInventory() {
+  const inv = S.inv;
+  if (!inv) return;
+  const eq = $('#invEquipped');
+  eq.innerHTML = (S.meta ? S.meta.slots : []).map((s) => {
+    const it = inv.equipped ? inv.equipped[s.id] : null;
+    return '<h4 style="margin:8px 0 5px">' + esc(s.name) + '</h4>' + itemCard(it, 'equipped');
+  }).join('');
+
+  $('#invCount').textContent = String((inv.inv || []).length);
+  $('#invBag').innerHTML = (inv.inv || []).length
+    ? inv.inv.map((it) => itemCard(it, 'bag')).join('')
+    : '<div class="item empty">Rucksack ist leer.</div>';
+
+  $('#invStats').innerHTML = STAT_LABELS
+    .filter(([k]) => inv.stats && inv.stats[k] !== undefined)
+    .map(([k, label, unit]) => '<div><span>' + label + '</span><b>' + inv.stats[k] + unit + '</b></div>')
+    .join('');
+
+  $('#invUpg').innerHTML = (inv.upgrades || []).length
+    ? inv.upgrades.map((u) => '<div><span>' + esc(u.name) + '</span><b>×' + u.stacks + '</b></div>').join('')
+    : '<div><span>noch keine</span><b>—</b></div>';
+}
+
+$('#inv').addEventListener('click', (ev) => {
+  const btn = ev.target.closest('button[data-act]');
+  if (!btn) return;
+  const id = btn.dataset.id;
+  if (!id) return;
+  if (btn.dataset.act === 'equip') sendMsg({ t: 'equip', id });
+  else sendMsg({ t: 'drop', id });
+});
+
+function toggleInv(force) {
+  S.invOpen = force === undefined ? !S.invOpen : !!force;
+  $('#inv').classList.toggle('hidden', !S.invOpen);
+  $('#btnInv').setAttribute('aria-pressed', String(S.invOpen));
+  if (S.invOpen) { sendMsg({ t: 'invreq' }); renderInventory(); }
+}
+
+// ===================================================================== Level-up-UI
+
+function renderLevelUp() {
+  const box = $('#lvopts');
+  box.textContent = '';
+  if (!S.levelOptions) { $('#levelup').classList.add('hidden'); return; }
+  S.levelOptions.forEach((o, i) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.innerHTML =
+      '<span class="k">Taste ' + (i + 1) + '</span>' +
+      '<span class="n">' + esc(o.name) + '</span>' +
+      '<span class="d">' + esc(o.desc) + '</span>' +
+      '<span class="s">bereits ' + o.stacks + ' / ' + o.max + '</span>';
+    b.addEventListener('click', () => chooseUpgrade(i));
+    box.appendChild(b);
+  });
+  $('#levelup').classList.remove('hidden');
+}
+
+function chooseUpgrade(i) {
+  if (!S.levelOptions || !S.levelOptions[i]) return;
+  sendMsg({ t: 'upgrade', idx: i });
+  S.levelOptions = null;
+  $('#levelup').classList.add('hidden');
+}
+
+// ===================================================================== Chat / Toasts / Banner
+
+function chatLine(html) {
+  const log = $('#chatlog');
+  const div = document.createElement('div');
+  div.innerHTML = html;
+  log.appendChild(div);
+  while (log.childElementCount > 8) log.removeChild(log.firstElementChild);
+}
+
+function toast(html, color) {
+  const box = $('#toasts');
+  const el = document.createElement('div');
+  el.className = 'toast';
+  if (color) el.style.borderLeftColor = color;
+  el.innerHTML = html;
+  box.appendChild(el);
+  setTimeout(() => el.remove(), 4200);
+  while (box.childElementCount > 5) box.removeChild(box.firstElementChild);
+}
+
+function banner(text, seconds) {
+  const el = $('#banner');
+  el.textContent = text;
+  el.classList.add('show');
+  S.bannerTimer = seconds;
+}
+
+function openChat() {
+  $('#chatform').classList.remove('hidden');
+  $('#chatinput').focus();
+}
+function closeChat() {
+  $('#chatform').classList.add('hidden');
+  $('#chatinput').value = '';
+  $('#chatinput').blur();
+}
+function chatOpen() { return !$('#chatform').classList.contains('hidden'); }
+
+$('#chatform').addEventListener('submit', (ev) => {
+  ev.preventDefault();
+  const text = $('#chatinput').value.trim();
+  if (text) sendMsg({ t: 'chat', text });
+  closeChat();
+});
+
+// ===================================================================== Eingabe
+
+const MOVE_KEYS = {
+  KeyW: [0, -1], ArrowUp: [0, -1],
+  KeyS: [0, 1], ArrowDown: [0, 1],
+  KeyA: [-1, 0], ArrowLeft: [-1, 0],
+  KeyD: [1, 0], ArrowRight: [1, 0],
+};
+
+window.addEventListener('keydown', (ev) => {
+  if (chatOpen()) {
+    if (ev.key === 'Escape') { ev.preventDefault(); closeChat(); }
+    return;
+  }
+  const target = ev.target;
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) return;
+
+  if (S.phase === 'game' && S.levelOptions && ['1', '2', '3'].includes(ev.key)) {
+    ev.preventDefault();
+    chooseUpgrade(Number(ev.key) - 1);
+    return;
+  }
+  if (S.phase !== 'game') return;
+
+  if (ev.code in MOVE_KEYS) { S.keys.add(ev.code); ev.preventDefault(); return; }
+  if (ev.code === 'Space' || ev.code === 'ShiftLeft' || ev.code === 'ShiftRight') {
+    S.dashQueued = true; ev.preventDefault(); return;
+  }
+  if (ev.code === 'Tab' || ev.code === 'KeyI') { ev.preventDefault(); toggleInv(); return; }
+  if (ev.code === 'Enter') { ev.preventDefault(); openChat(); return; }
+  if (ev.code === 'Escape') { toggleInv(false); }
+}, { passive: false });
+
+window.addEventListener('keyup', (ev) => { S.keys.delete(ev.code); });
+window.addEventListener('blur', () => { S.keys.clear(); });
+
+function keyVector() {
+  let mx = 0;
+  let my = 0;
+  for (const code of S.keys) {
+    const v = MOVE_KEYS[code];
+    if (v) { mx += v[0]; my += v[1]; }
+  }
+  return { mx: clamp(mx, -1, 1), my: clamp(my, -1, 1) };
+}
+
+function inputVector() {
+  if (S.stick) return { mx: S.stick.mx, my: S.stick.my };
+  return keyVector();
+}
+
+// Virtueller Stick: Finger/Maus auf dem Spielfeld zieht die Richtung.
+cv.addEventListener('pointerdown', (ev) => {
+  if (S.phase !== 'game' || ev.pointerType === 'mouse') return;
+  cv.setPointerCapture(ev.pointerId);
+  S.stick = { id: ev.pointerId, ox: ev.clientX, oy: ev.clientY, mx: 0, my: 0 };
+});
+cv.addEventListener('pointermove', (ev) => {
+  if (!S.stick || ev.pointerId !== S.stick.id) return;
+  const dx = ev.clientX - S.stick.ox;
+  const dy = ev.clientY - S.stick.oy;
+  const len = Math.hypot(dx, dy);
+  const max = 64;
+  if (len < 8) { S.stick.mx = 0; S.stick.my = 0; return; }
+  const k = Math.min(1, len / max) / len;
+  S.stick.mx = clamp(dx * k, -1, 1);
+  S.stick.my = clamp(dy * k, -1, 1);
+});
+function endStick(ev) {
+  if (S.stick && ev.pointerId === S.stick.id) S.stick = null;
+}
+cv.addEventListener('pointerup', endStick);
+cv.addEventListener('pointercancel', endStick);
+
+$('#btnDash').addEventListener('click', () => { S.dashQueued = true; });
+$('#btnInv').addEventListener('click', () => toggleInv());
+$('#btnHelp').addEventListener('click', () => {
+  toast('WASD / Pfeile bewegen · Leertaste Sprint · Tab Inventar · Enter Chat · Angriffe erfolgen automatisch');
+});
+
+setInterval(() => {
+  if (S.phase !== 'game') return;
+  const v = inputVector();
+  const dash = S.dashQueued;
+  S.dashQueued = false;
+  const now = performance.now();
+  const changed = v.mx !== S.lastInput.mx || v.my !== S.lastInput.my;
+  if (changed || dash || now - S.lastInputAt > 250) {
+    sendMsg({ t: 'input', mx: Math.round(v.mx * 1000) / 1000, my: Math.round(v.my * 1000) / 1000, dash });
+    S.lastInput = v;
+    S.lastInputAt = now;
+  }
+}, 50);
+
+// ===================================================================== Beitreten / Verlassen
+
+function randomCode() {
+  const abc = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let s = '';
+  for (let i = 0; i < 5; i++) s += abc[Math.floor(Math.random() * abc.length)];
+  return s;
+}
+
+$('#btnRnd').addEventListener('click', () => { $('#inRoom').value = randomCode(); });
+
+$('#btnJoin').addEventListener('click', () => {
+  const name = ($('#inName').value || 'Held').trim().slice(0, 16);
+  const room = ($('#inRoom').value || 'LOBBY').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 8) || 'LOBBY';
+  S.name = name;
+  $('#inName').value = name;
+  $('#inRoom').value = room;
+  try {
+    localStorage.setItem('ws.name', name);
+    localStorage.setItem('ws.room', room);
+  } catch { /* privater Modus */ }
+  connect(name, room);
+});
+
+$('#inRoom').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') $('#btnJoin').click(); });
+$('#inName').addEventListener('keydown', (ev) => { if (ev.key === 'Enter') $('#btnJoin').click(); });
+
+$('#btnReady').addEventListener('click', () => {
+  if (!S.cls) { $('#lbErr').textContent = 'Wähle zuerst eine Klasse.'; return; }
+  S.ready = !S.ready;
+  sendMsg({ t: 'ready', v: S.ready });
+  renderLobby();
+});
+
+$('#btnCopy').addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(S.room);
+    $('#btnCopy').textContent = 'Kopiert ✓';
+  } catch {
+    $('#btnCopy').textContent = S.room;
+  }
+  setTimeout(() => { $('#btnCopy').textContent = 'Code kopieren'; }, 1600);
+});
+
+$('#btnLeave').addEventListener('click', () => {
+  if (S.ws) { try { S.ws.close(); } catch { /* ignore */ } }
+  S.ws = null;
+  S.ready = false;
+  setPhase('join');
+  $('#joinErr').textContent = '';
+});
+
+$('#btnBack').addEventListener('click', () => {
+  sendMsg({ t: 'lobby' });
+  S.ready = false;
+  setPhase('lobby');
+});
+
+try {
+  $('#inName').value = localStorage.getItem('ws.name') || '';
+  $('#inRoom').value = localStorage.getItem('ws.room') || '';
+} catch { /* ignore */ }
+
+// ===================================================================== Hilfen
+
+function esc(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) =>
+    ({ '&': '&', '<': '<', '>': '>', '"': '"', "'": '&#39;' }[c]));
+}
+
+function classColor(id) {
+  const c = S.meta && S.meta.classes.find((x) => x.id === id);
+  return c ? c.color : CLASS_FALLBACK_COLOR;
+}
+function className(id) {
+  const c = S.meta && S.meta.classes.find((x) => x.id === id);
+  return c ? c.name : (id || '—');
+}
+function rarityColor(idx) {
+  const r = S.meta && S.meta.rarities[idx];
+  return r ? r.color : '#b8c0cc';
+}
+function slotName(id) {
+  const s = S.meta && S.meta.slots.find((x) => x.id === id);
+  return s ? s.name : id;
+}
+function enemyMeta(type) {
+  return (S.meta && S.meta.enemies[type]) || { name: type, color: '#ff6b6b', r: 14, boss: false };
+}
+
+function smoothPos(id, x, y, dt, rate) {
+  let s = S.smooth.get(id);
+  if (!s) { s = { x, y }; S.smooth.set(id, s); }
+  const k = 1 - Math.exp(-(rate || 16) * dt);
+  s.x = lerp(s.x, x, k);
+  s.y = lerp(s.y, y, k);
+  S.seen.add(id);
+  return s;
+}
+
+function consumeFx(list) {
+  for (const f of list) {
+    switch (f.k) {
+      case 'h':
+        S.texts.push({ x: f.x, y: f.y, v: String(f.v), col: f.c ? '#ffd166' : '#ffffff', size: f.c ? 17 : 13, t: 0, life: 0.75 });
+        break;
+      case 'ph':
+        S.texts.push({ x: f.x, y: f.y, v: '-' + f.v, col: '#ff6b6b', size: 16, t: 0, life: 0.9 });
+        break;
+      case 'lvl':
+        S.texts.push({ x: f.x, y: f.y - 36, v: 'Stufe!', col: '#6ee7a8', size: 16, t: 0, life: 1.2 });
+        S.efx.push({ k: 'ring', x: f.x, y: f.y, r: 60, col: '#6ee7a8', t: 0, life: 0.6 });
+        break;
+      case 'die':
+        S.efx.push({ k: 'burst', x: f.x, y: f.y, r: f.r || 14, col: enemyMeta(f.t).color, t: 0, life: 0.4 });
+        break;
+      case 'boom':
+        S.efx.push({ k: 'boom', x: f.x, y: f.y, r: f.r, col: '#ffb347', t: 0, life: 0.34 });
+        break;
+      case 'nova':
+        S.efx.push({ k: 'ring', x: f.x, y: f.y, r: f.r, col: f.c || '#ffffff', t: 0, life: 0.38 });
+        break;
+      case 'cleave':
+        S.efx.push({ k: 'cleave', x: f.x, y: f.y, a: f.a, r: f.r, w: f.w, col: f.c || '#ffffff', t: 0, life: 0.22 });
+        break;
+      case 'dash':
+        S.efx.push({ k: 'ring', x: f.x, y: f.y, r: 34, col: f.c || '#ffffff', t: 0, life: 0.3 });
+        break;
+      case 'bless':
+        S.efx.push({ k: 'ring', x: f.x, y: f.y, r: 44, col: '#ffd166', t: 0, life: 0.5 });
+        break;
+      case 'pick':
+        if (f.p === 'item') S.efx.push({ k: 'ring', x: f.x, y: f.y, r: 24, col: '#4da3ff', t: 0, life: 0.3 });
+        break;
+      case 'revive':
+        S.texts.push({ x: f.x, y: f.y - 40, v: f.n + ' ist zurück!', col: '#6ee7a8', size: 15, t: 0, life: 1.6 });
+        break;
+      case 'down':
+        S.texts.push({ x: f.x, y: f.y - 40, v: f.n + ' am Boden!', col: '#ffd166', size: 15, t: 0, life: 1.8 });
+        break;
+      case 'dead':
+        S.texts.push({ x: f.x, y: f.y - 40, v: f.n + ' gefallen', col: '#ff6b6b', size: 15, t: 0, life: 2 });
+        break;
+      default:
+        break;
+    }
+  }
+  while (S.texts.length > 160) S.texts.shift();
+  while (S.efx.length > 160) S.efx.shift();
+}
+
+// ===================================================================== HUD-Update
+
+function updateHud() {
+  const s = S.snap;
+  if (!s) return;
+  const you = s.you;
+
+  $('#meName').textContent = S.name || 'Du';
+  $('#meCls').textContent = className(S.cls);
+
+  const hpPct = you.mhp > 0 ? clamp((you.hp / you.mhp) * 100, 0, 100) : 0;
+  $('#hpFill').style.width = hpPct + '%';
+  $('#hpTxt').textContent = you.hp + ' / ' + you.mhp;
+
+  const xpPct = you.xpn > 0 ? clamp((you.xp / you.xpn) * 100, 0, 100) : 0;
+  $('#xpFill').style.width = xpPct + '%';
+  $('#xpTxt').textContent = 'Stufe ' + you.lv + ' — ' + you.xp + ' / ' + you.xpn + ' EP';
+
+  $('#sGold').textContent = you.gold;
+  $('#sKills').textContent = you.kills;
+  $('#sDmg').textContent = you.dmg;
+  $('#sMs').textContent = you.ms;
+
+  if (s.ws === 'intermission') {
+    $('#wTitle').textContent = 'Pause';
+    $('#wSub').textContent = 'Nächste Welle in ' + Math.ceil(s.wt) + 's · Welle ' + (s.wave + 1) + ' folgt';
+  } else {
+    $('#wTitle').textContent = 'Welle ' + s.wave;
+    $('#wSub').textContent = s.left + ' Gegner übrig · ' + fmtTime(s.time);
+  }
+
+  const dashPct = clamp((you.dashCd / 3) * 100, 0, 100);
+  $('#pillDash').classList.toggle('ready', you.dashCd <= 0);
+  $('#pillDash').querySelector('.fill').style.width = dashPct + '%';
+
+  $('#abName').textContent = you.abName || 'Fähigkeit';
+  const abReady = you.abCd <= 0;
+  $('#abState').textContent = abReady ? 'bereit' : you.abCd.toFixed(1) + 's';
+  $('#pillAb').classList.toggle('ready', abReady);
+  $('#pillAb').querySelector('.fill').style.width = (abReady ? 0 : 100) + '%';
+
+  const note = $('#deadnote');
+  if (you.dead) {
+    note.classList.remove('hidden');
+    $('#deadTitle').textContent = 'Gefallen';
+    $('#deadSub').textContent = 'Du kehrst nach dieser Welle zurück.';
+  } else if (you.down) {
+    note.classList.remove('hidden');
+    const me = (s.ps || []).find((p) => p.i === you.i);
+    $('#deadTitle').textContent = 'Am Boden';
+    $('#deadSub').textContent = me
+      ? 'Wiederbelebung ' + me.rv + '% · ' + me.dt + 's bis zum Aus'
+      : 'Warte auf Hilfe.';
+  } else {
+    note.classList.add('hidden');
+  }
+}
+
+function fmtTime(sec) {
+  const m = Math.floor(sec / 60);
+  const r = sec % 60;
+  return String(m).padStart(2, '0') + ':' + String(r).padStart(2, '0');
+}
+
+// ===================================================================== Rendern
+
+let lastFrame = performance.now();
+
+function frame(now) {
+  const dt = Math.min(0.05, Math.max(0.001, (now - lastFrame) / 1000));
+  lastFrame = now;
+
+  if (S.bannerTimer > 0) {
+    S.bannerTimer -= dt;
+    if (S.bannerTimer <= 0) $('#banner').classList.remove('show');
+  }
+
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.clearRect(0, 0, cv.width, cv.height);
+
+  if (S.phase === 'game' && S.snap) {
+    draw(dt);
+    updateHud();
+  } else {
+    drawIdleBackdrop();
+  }
+
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+function drawIdleBackdrop() {
+  const w = cv.width;
+  const h = cv.height;
+  const g = ctx.createRadialGradient(w / 2, 0, 0, w / 2, h, Math.max(w, h));
+  g.addColorStop(0, '#121a26');
+  g.addColorStop(1, '#080b11');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, w, h);
+}
+
+function draw(dt) {
+  const s = S.snap;
+  const w = cv.width / dpr;
+  const h = cv.height / dpr;
+
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  // Kamera folgt dem eigenen Spieler
+  const mine = (s.ps || []).find((p) => p.i === s.you.i);
+  if (mine) {
+    const target = smoothPos('me', mine.x, mine.y, dt, 20);
+    S.cam.x = lerp(S.cam.x, target.x, 1 - Math.exp(-10 * dt));
+    S.cam.y = lerp(S.cam.y, target.y, 1 - Math.exp(-10 * dt));
+  }
+  const camX = clamp(S.cam.x, w / 2, Math.max(w / 2, S.arena.w - w / 2));
+  const camY = clamp(S.cam.y, h / 2, Math.max(h / 2, S.arena.h - h / 2));
+  const ox = w / 2 - camX;
+  const oy = h / 2 - camY;
+
+  // Hintergrund
+  ctx.fillStyle = '#0c1017';
+  ctx.fillRect(0, 0, w, h);
+
+  const cell = 96;
+  ctx.strokeStyle = '#141b26';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  const startX = Math.floor((camX - w / 2) / cell) * cell;
+  const endX = camX + w / 2;
+  for (let x = startX; x <= endX; x += cell) {
+    const sx = Math.round(x + ox) + 0.5;
+    ctx.moveTo(sx, 0);
+    ctx.lineTo(sx, h);
+  }
+  const startY = Math.floor((camY - h / 2) / cell) * cell;
+  const endY = camY + h / 2;
+  for (let y = startY; y <= endY; y += cell) {
+    const sy = Math.round(y + oy) + 0.5;
+    ctx.moveTo(0, sy);
+    ctx.lineTo(w, sy);
+  }
+  ctx.stroke();
+
+  // Arenagrenze
+  ctx.strokeStyle = '#2a3443';
+  ctx.lineWidth = 3;
+  ctx.strokeRect(ox, oy, S.arena.w, S.arena.h);
+
+  S.seen.clear();
+
+  // Aufsammelbares
+  for (const q of s.pk || []) {
+    const p = smoothPos('k' + q.i, q.x, q.y, dt, 24);
+    const x = p.x + ox;
+    const y = p.y + oy;
+    if (q.k === 'xp') {
+      ctx.fillStyle = '#4fd1c5';
+      diamond(x, y, 5);
+    } else if (q.k === 'gold') {
+      ctx.fillStyle = '#ffd166';
+      circle(x, y, 5);
+    } else if (q.k === 'hp') {
+      ctx.fillStyle = '#ff6b6b';
+      ctx.fillRect(x - 6, y - 2, 12, 4);
+      ctx.fillRect(x - 2, y - 6, 4, 12);
+    } else {
+      const col = rarityColor(q.r);
+      ctx.save();
+      ctx.shadowColor = col;
+      ctx.shadowBlur = 14;
+      ctx.fillStyle = col;
+      ctx.fillRect(x - 6, y - 6, 12, 12);
+      ctx.restore();
+    }
+  }
+
+  // Gegner
+  for (const e of s.es || []) {
+    const p = smoothPos('e' + e.i, e.x, e.y, dt, 18);
+    const x = p.x + ox;
+    const y = p.y + oy;
+    const meta = enemyMeta(e.t);
+    ctx.fillStyle = e.f ? '#ffffff' : meta.color;
+    circle(x, y, e.r);
+    if (e.e || e.b) {
+      ctx.strokeStyle = e.b ? '#ffb347' : '#ffffff99';
+      ctx.lineWidth = e.b ? 3 : 2;
+      ctx.beginPath();
+      ctx.arc(x, y, e.r + 4, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    if (e.h < 100) {
+      const bw = Math.max(20, e.r * 2);
+      ctx.fillStyle = '#000000aa';
+      ctx.fillRect(x - bw / 2, y - e.r - 10, bw, 4);
+      ctx.fillStyle = e.b ? '#ffb347' : '#ff6b6b';
+      ctx.fillRect(x - bw / 2, y - e.r - 10, (bw * e.h) / 100, 4);
+    }
+    if (e.b) {
+      ctx.fillStyle = '#ffd9a0';
+      ctx.font = '600 12px system-ui, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(meta.name, x, y - e.r - 16);
+    }
+  }
+
+  // Spieler
+  for (const pl of s.ps || []) {
+    const p = smoothPos('p' + pl.i, pl.x, pl.y, dt, 20);
+    const x = p.x + ox;
+    const y = p.y + oy;
+    const col = classColor(pl.c);
+    const self = pl.i === s.you.i;
+
+    if (!pl.a) {
+      ctx.strokeStyle = '#55607280';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x - 9, y - 9);
+      ctx.lineTo(x + 9, y + 9);
+      ctx.moveTo(x + 9, y - 9);
+      ctx.lineTo(x - 9, y + 9);
+      ctx.stroke();
+      label(x, y + 26, pl.n, '#8b96a8');
+      continue;
+    }
+
+    if (pl.iv) {
+      ctx.strokeStyle = '#ffffff66';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x, y, 24, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+
+    // Blickrichtung
+    ctx.strokeStyle = col + 'aa';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    ctx.lineTo(x + Math.cos(pl.f) * 24, y + Math.sin(pl.f) * 24);
+    ctx.stroke();
+
+    ctx.fillStyle = pl.hf ? '#ffffff' : (pl.d ? '#6b7280' : col);
+    circle(x, y, 15);
+    ctx.strokeStyle = self ? '#ffffff' : '#00000066';
+    ctx.lineWidth = self ? 2 : 1;
+    ctx.beginPath();
+    ctx.arc(x, y, 15, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Lebensbalken
+    const bw = 40;
+    const frac = pl.m > 0 ? clamp(pl.hp / pl.m, 0, 1) : 0;
+    ctx.fillStyle = '#000000aa';
+    ctx.fillRect(x - bw / 2, y - 27, bw, 5);
+    ctx.fillStyle = pl.d ? '#ffd166' : '#6ee7a8';
+    ctx.fillRect(x - bw / 2, y - 27, bw * frac, 5);
+
+    if (pl.d) {
+      ctx.fillStyle = '#000000aa';
+      ctx.fillRect(x - bw / 2, y - 20, bw, 4);
+      ctx.fillStyle = '#4da3ff';
+      ctx.fillRect(x - bw / 2, y - 20, (bw * pl.rv) / 100, 4);
+      label(x, y + 30, 'Hilfe! ' + pl.dt + 's', '#ffd166');
+    } else {
+      label(x, y + 30, pl.n + ' · ' + pl.l, self ? '#ffffff' : '#c6d0de');
+    }
+  }
+
+  // Projektile
+  for (const q of s.pr || []) {
+    const x = q.x + ox;
+    const y = q.y + oy;
+    if (q.t === 'arrow') {
+      ctx.strokeStyle = q.c;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - Math.cos(q.a) * 14, y - Math.sin(q.a) * 14);
+      ctx.stroke();
+    } else {
+      ctx.save();
+      ctx.shadowColor = q.c;
+      ctx.shadowBlur = 12;
+      ctx.fillStyle = q.t === 'eshot' ? '#ff9f6b' : q.c;
+      circle(x, y, q.r);
+      ctx.restore();
+    }
+  }
+
+  // Effekte
+  for (const f of S.efx) {
+    f.t += dt;
+    const k = clamp(f.t / f.life, 0, 1);
+    const a = 1 - k;
+    const x = f.x + ox;
+    const y = f.y + oy;
+    ctx.globalAlpha = a;
+    if (f.k === 'ring' || f.k === 'boom') {
+      ctx.strokeStyle = f.col;
+      ctx.lineWidth = f.k === 'boom' ? 5 : 3;
+      ctx.beginPath();
+      ctx.arc(x, y, f.r * (0.45 + 0.75 * k), 0, Math.PI * 2);
+      ctx.stroke();
+    } else if (f.k === 'cleave') {
+      ctx.fillStyle = f.col + '44';
+      ctx.strokeStyle = f.col;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      ctx.arc(x, y, f.r, f.a - f.w / 2, f.a + f.w / 2);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    } else if (f.k === 'burst') {
+      ctx.fillStyle = f.col;
+      for (let i = 0; i < 6; i++) {
+        const ang = (i / 6) * Math.PI * 2;
+        const d = f.r * (0.5 + 1.6 * k);
+        circle(x + Math.cos(ang) * d, y + Math.sin(ang) * d, Math.max(1, 3 * a));
+      }
+    }
+    ctx.globalAlpha = 1;
+  }
+  S.efx = S.efx.filter((f) => f.t < f.life);
+
+  // Schwebende Zahlen
+  ctx.textAlign = 'center';
+  for (const t of S.texts) {
+    t.t += dt;
+    const k = clamp(t.t / t.life, 0, 1);
+    ctx.globalAlpha = 1 - k * k;
+    ctx.fillStyle = t.col;
+    ctx.font = '700 ' + t.size + 'px system-ui, sans-serif';
+    ctx.fillText(t.v, t.x + ox, t.y + oy - k * 28);
+    ctx.globalAlpha = 1;
+  }
+  S.texts = S.texts.filter((t) => t.t < t.life);
+
+  // Vergessene Interpolationsziele aufräumen
+  if (S.smooth.size > 600) {
+    for (const key of S.smooth.keys()) {
+      if (key !== 'me' && !S.seen.has(key)) S.smooth.delete(key);
+    }
+  }
+
+  drawMinimap(w, h);
+}
+
+function drawMinimap(w, h) {
+  const s = S.snap;
+  const size = Math.min(150, Math.max(90, w * 0.14));
+  const mh = (size * S.arena.h) / S.arena.w;
+  const x0 = w - size - 12;
+  const y0 = h - mh - 12;
+  const sx = size / S.arena.w;
+  const sy = mh / S.arena.h;
+
+  ctx.fillStyle = '#0d121bcc';
+  ctx.strokeStyle = '#2a3443';
+  ctx.lineWidth = 1;
+  ctx.fillRect(x0, y0, size, mh);
+  ctx.strokeRect(x0, y0, size, mh);
+
+  ctx.fillStyle = '#ff6b6b99';
+  for (const e of s.es || []) {
+    ctx.fillRect(x0 + e.x * sx - 1, y0 + e.y * sy - 1, e.b ? 4 : 2, e.b ? 4 : 2);
+  }
+  for (const p of s.ps || []) {
+    ctx.fillStyle = p.i === s.you.i ? '#ffffff' : classColor(p.c);
+    ctx.fillRect(x0 + p.x * sx - 2, y0 + p.y * sy - 2, 4, 4);
+  }
+}
+
+function circle(x, y, r) {
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  ctx.fill();
+}
+
+function diamond(x, y, r) {
+  ctx.beginPath();
+  ctx.moveTo(x, y - r);
+  ctx.lineTo(x + r, y);
+  ctx.lineTo(x, y + r);
+  ctx.lineTo(x - r, y);
+  ctx.closePath();
+  ctx.fill();
+}
+
+function label(x, y, text, color) {
+  ctx.font = '600 11px system-ui, sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#000000aa';
+  ctx.fillText(text, x + 1, y + 1);
+  ctx.fillStyle = color;
+  ctx.fillText(text, x, y);
+}
+</script>
+</body>
+</html>
